@@ -1,5 +1,8 @@
 # Front
 
 # Back
+src/back/.venv/
+**/__pycache__/
+*.pyc
 
 # IDE

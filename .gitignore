@@ -1,8 +1,11 @@
 # Front
-
+src\front\node_modules
 # Back
 src/back/.venv/
 **/__pycache__/
 *.pyc
 
 # IDE
+
+# Environment 
+.env

@@ -1,11 +1,28 @@
-# Front
-src\front\node_modules
-# Back
-src/back/.venv/
-**/__pycache__/
-*.pyc
+# --- FRONTEND (client) ---
+client/node_modules/
+client/dist/
+client/dist-ssr/
+client/.eslintcache
+*.local
+npm-debug.log*
+yarn-debug.log*
 
-# IDE
+# --- BACKEND (server) ---
+server/.venv/
+server/__pycache__/
+server/*.pyc
+server/.env
 
-# Environment 
+# --- STORAGE & DATA ---
+storage/
+chroma_db/
+
+# --- IDE & SYSTEM ---
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.sw?
+
+# --- ENVIRONMENT ---
 .env

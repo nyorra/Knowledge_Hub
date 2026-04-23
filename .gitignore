@@ -1,28 +1,19 @@
 # --- FRONTEND (client) ---
 client/node_modules/
-client/dist/
-client/dist-ssr/
-client/.eslintcache
-*.local
-npm-debug.log*
-yarn-debug.log*
 
-# --- BACKEND (server) ---
+# --- BACKEND ---
 server/.venv/
-server/__pycache__/
+**__pycache__/
 server/*.pyc
-server/.env
+
 
 # --- STORAGE & DATA ---
 storage/
-chroma_db/
 
-# --- IDE & SYSTEM ---
+# --- IDE ---
 .vscode/
 .idea/
-.DS_Store
-*.suo
-*.sw?
 
 # --- ENVIRONMENT ---
 .env
+devtools

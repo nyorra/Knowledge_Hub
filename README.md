@@ -4,67 +4,78 @@ Web-приложение для создания персональной баз
 
 ## 🚀 Стек
 
-- **AI Engine:** Python, FastAPI, LangChain
+- **Backend:** Python, FastAPI, LangChain
 - **Frontend:** React, Tailwind CSS
-- **Database:** Vector DB (ChromaDB), PostgreSQL
-- **Environment:** Docker & Docker Compose
+- **Database:** ChromaDB, PostgreSQL
+- **Environment:** Docker & Docker Compose, uv
 
 ---
 
 ## 🛠 Установка и запуск
 
-### 1. Backend (Python)
+### 1. Backend (Server)
 
-1. Клонируйте репозиторий:
+Мы используем `uv` для управления окружением и зависимостями.
+
+1. Перейдите в директорию сервера:
 
    ```bash
-   git clone https://github.com
-   cd AI_Knowledge_Hub/src/back
+   cd server
    ```
 
-2. Создайте и активируйте виртуальное окружение:
+2. Создайте окружение и установите зависимости:
 
    ```bash
-   python -m venv .venv
+   uv venv --python 3.13
    # Windows:
-   .\.venv\Scripts\activate
-   # Linux/Mac:
-   source .venv/bin/activate
+   .venv\Scripts\activate
+   # Установка:
+   uv sync
    ```
 
-3. Установите зависимости:
+3. Запуск в режиме разработки:
 
    ```bash
-   pip install -r requirements.txt
+   uv run uvicorn app.main:app --reload
    ```
 
-4. Запуск приложения:
+### 2. Frontend (React)
 
+1. Перейдите в директорию клиента:
    ```bash
-   uvicorn main:app --reload
+   cd client
+   ```
+
+2. Установите зависимости и запустите:
+   ```bash
+   npm install
+   npm run dev
    ```
 
 ---
 
-### 2. Frontend (React)
+## 🏗 Структура проекта
 
-1. Перейдите в папку frontend:
+- `/server/app/` — Логика бэкенда (API, модели, RAG-сервисы).
+- `/client/src/` — Фронтенд на React.
+- `/storage/pdfs/` — Локальное хранилище загруженных документов (игнорируется Git).
 
-   ```bash
-   cd src/front
-   ```
+---
 
-2. Установите зависимости:
+## 📝 Правила разработки
 
-   ```bash
-   npm install
-   ```
+### Conventional Commits
+Мы придерживаемся стандарта именования коммитов:
+- `feat:` — новая функциональность.
+- `fix:` — исправление ошибок.
+- `build:` — изменение зависимостей (uv add/remove).
+- `refactor:` — изменение структуры кода без смены логики.
+- `chore:` — рутинные задачи, конфиги.
 
-3. Запуск React приложения:
-
-   ```bash
-   npm start
-   ```
+### Python Environment
+- Минимальная версия: **Python 3.13**.
+- Все зависимости добавляются через `uv add <package>`.
+- Не используйте `requirements.txt` напрямую, актуальное состояние — в `pyproject.toml`.
 
 ---
 
@@ -74,4 +85,4 @@ Web-приложение для создания персональной баз
 
 Данный проект является интеллектуальной собственностью автора. Копирование кода, модификация или использование в коммерческих целях без письменного согласия автора **запрещены**.
 
-По всем вопросам: [nyorraa](https://github.com)
+По всем вопросам: [nyorraa](https://github.com/nyorra/nyorra.git)

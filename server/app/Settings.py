@@ -4,6 +4,8 @@ import os
 class Settings(BaseSettings):
     client_url: str
     server_url: str
+    
+    storage_path: str
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(__file__), "../../.env"),

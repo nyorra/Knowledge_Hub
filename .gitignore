@@ -1,5 +1,6 @@
 # --- FRONTEND (client) ---
 client/node_modules/
+node_modules/
 
 # --- BACKEND ---
 server/.venv/
@@ -17,3 +18,4 @@ storage/
 # --- ENVIRONMENT ---
 .env
 devtools
+

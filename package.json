@@ -1,0 +1,25 @@
+{
+  "name": "knowledge_hub",
+  "version": "1.0.0",
+  "description": "Web-приложение для создания персональной базы знаний. Позволяет загружать файлы и получать информацию по их контексту с помощью ИИ.",
+  "main": "index.js",
+  "scripts": {
+  "dev": "concurrently -n \"API,WEB\" -c \"green,cyan\" \"cd server && uv run uvicorn app.main:app --reload\" \"npm run dev --prefix client\""
+}
+,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyorra/Knowledge_Hub.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/nyorra/Knowledge_Hub/issues"
+  },
+  "homepage": "https://github.com/nyorra/Knowledge_Hub#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

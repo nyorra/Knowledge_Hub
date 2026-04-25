@@ -1,9 +1,9 @@
-import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from .Settings import settings
+from app.Settings import settings
+from app.schemas import AskRequest, AskResponse
 
 
 app = FastAPI()
@@ -16,17 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-first_mes = "HelloWorld"
-
-@app.get("/main")
-async def get_main_page():
-    return {
-        "status": first_mes,
-        "backend_url": settings.client_url
-    }
-
 @app.post("/ask")
-async def ask_ai(payload: dict):
-    user_text = payload.get("text")
-    print(f"Дошло до питона: {user_text}")
-    return {"answer": f"ИИ получил твой текст: {user_text}"}
+async def get_ai_request(data: AskRequest):
+    return AskResponse(status="success", answer=f"Получено: {data.text}")
+
+@app.post("/storage")
+async def get_sotrage_files():
+    pass

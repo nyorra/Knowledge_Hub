@@ -6,3 +6,10 @@ class AskRequest(BaseModel):
 class AskResponse(BaseModel):
     status: str
     answer: str
+
+class FileData(BaseModel):
+    filename: str
+    content: str
+
+class FilesResponse(BaseModel):
+    files: list[str]    

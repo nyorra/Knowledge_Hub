@@ -20,7 +20,6 @@ function App() {
 
   /**
    * Синхронизация списка имен файлов.
-   * Важно: бэкенд возвращает FilesResponse { files: string[] }
    */
   const fetchFiles = async () => {
     try {
@@ -33,21 +32,40 @@ function App() {
   };
 
   /**
+   * Отправка запроса через Enter
+   */
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+
+      if (loading || !aiText.trim()) return;
+
+      handleSendToAi();
+    }
+  };
+
+  /**
    * RAG-интерфейс: отправка промпта.
-   * На бэкенде FastAPI валидирует AskRequest через Pydantic.
    */
   const handleSendToAi = async () => {
     if (!aiText.trim()) return;
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/ask", {
+      const response = await fetch("http://localhost:8000/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: aiText }),
+        body: JSON.stringify({ question: aiText }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Ошибка сервера: ${response.status}`);
+      }
+
       const data = await response.json();
-      setAiResponse(data.answer || data.received);
+
+      setAiResponse(data.answer || "Ответ не получен");
     } catch (error) {
+      console.error("AI Error:", error);
       setAiResponse("AI Service Unavailable");
     } finally {
       setLoading(false);
@@ -271,13 +289,14 @@ function App() {
             <div className="relative">
               <textarea
                 value={aiText}
+                onKeyDown={handleKeyDown}
                 onChange={(e) => setAiText(e.target.value)}
                 placeholder="Задайте вопрос по вашим данным..."
                 className="w-full h-44 p-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/5 focus:border-indigo-400 outline-none shadow-inner resize-none transition-all text-sm leading-relaxed"
                 disabled={loading}
               />
               <div className="absolute bottom-4 right-4 text-[10px] font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-100">
-                {aiText.length} СИМВОЛОВ
+                {aiText.length} Символов
               </div>
             </div>
 

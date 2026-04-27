@@ -4,10 +4,11 @@ from pathlib import Path
 
 from ..Settings import settings
 
+
 class FileStorageService:
     def __init__(self, storage_path: str):
         """Инициализация сервиса: конвертирует путь в объект Path и проверяет его наличие."""
-        self.storage_path = Path(storage_path) 
+        self.storage_path = Path(storage_path)
         self._ensure_storage_exist()
 
     def _ensure_storage_exist(self):
@@ -23,21 +24,23 @@ class FileStorageService:
         file_path = self._get_path(filename)
         file_path.write_text(content, encoding="utf-8")
         return {"status": "created", "filename": filename}
-    
-    def upload_file_from_pc(self, file_object, raw_filename: str, use_uuid: bool = False):
+
+    def upload_file_from_pc(
+        self, file_object, raw_filename: str, use_uuid: bool = False
+    ):
         """
         Сохраняет файл, полученный через веб-запрос, на диск.
         Использует потоковую запись (shutil) для минимизации нагрузки на RAM.
         """
         safe_filename = Path(raw_filename).name
-        
+
         if use_uuid:
             unique_name = f"{uuid.uuid4().hex[:8]}_{safe_filename}"
         else:
             unique_name = safe_filename
-        
+
         dest = self._get_path(unique_name)
-        
+
         try:
             with dest.open("wb") as buffer:
                 shutil.copyfileobj(file_object, buffer)
@@ -71,6 +74,7 @@ class FileStorageService:
             return {"status": "deleted", "filename": filename}
         except FileNotFoundError:
             return {"status": "error", "message": "File not found"}
+
 
 # Инициализация глобального экземпляра сервиса
 storage_service = FileStorageService(settings.storage_path)

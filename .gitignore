@@ -1,21 +1,45 @@
 # --- FRONTEND (client) ---
 client/node_modules/
 node_modules/
+client/dist/
+client/build/
 
 # --- BACKEND ---
 server/.venv/
-**__pycache__/
-server/*.pyc
-
+**/__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 
 # --- STORAGE & DATA ---
 storage/
+chroma_db/
+*.db
+*.sqlite
 
 # --- IDE ---
 .vscode/
 .idea/
+*.swp
+*~
 
 # --- ENVIRONMENT ---
 .env
+.env.local
+.env.*.local
+
+# --- LOGS ---
+*.log
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- PROJECT ---
 devtools.txt
 CLAUDE.md

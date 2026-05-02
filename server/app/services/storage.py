@@ -2,7 +2,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from ..Settings import settings
+from app.core.settings import settings
 
 
 class FileStorageService:

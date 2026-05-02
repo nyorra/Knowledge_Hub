@@ -1,7 +1,7 @@
 from langchain_openai import ChatOpenAI
 
-from app.services.storage import storage_service
-from app.Settings import settings
+from app.core.settings import settings
+from app.core.startup import rag_service
 
 
 class AssistantService:
@@ -11,21 +11,19 @@ class AssistantService:
             base_url="https://openrouter.ai/api/v1",
             model="meta-llama/llama-3.1-8b-instruct",
         )
-
-    def _get_all_file_context(self) -> str:
-        """Внутренний метод для агрегации текстов из всех файлов."""
-        filenames = storage_service.get_all_files()
-        context_parts = []
-
-        for name in filenames:
-            content = storage_service.get_file_content(name)
-            if content:
-                context_parts.append(f"--- DOCUMENT: {name} ---\n{content}")
-
-        return "\n\n".join(context_parts) if context_parts else "База знаний пуста."
+        self.rag_service = rag_service
 
     async def answer_question(self, question: str) -> str:
-        context = self._get_all_file_context()
+        relevant_chunks = self.rag_service.retrieve(question, top_k=5)
+
+        if not relevant_chunks:
+            context = "База знаний пуста."
+        else:
+            context_parts = [
+                f"--- DOCUMENT: {chunk['metadata']['source']} ---\n{chunk['content']}"
+                for chunk in relevant_chunks
+            ]
+            context = "\n\n".join(context_parts)
 
         system_prompt = (
             "Ты — инженерный ассистент системы AI Knowledge Hub. "

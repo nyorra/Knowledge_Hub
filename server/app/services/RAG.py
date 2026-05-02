@@ -1,21 +1,32 @@
-# A Retrieval-Augmented Generation (RAG) - Генерация с улучшенным извлечением информации
+"""
+Retrieval-Augmented Generation (RAG) service.
+Manages vector embeddings and semantic search for knowledge retrieval.
+
+Architecture:
+- Embeddings: sentence-transformers/all-MiniLM-L6-v2 (local, CPU)
+- Vector Store: ChromaDB (persistent)
+- Chunking: RecursiveCharacterTextSplitter (1000 chars, 200 overlap)
+"""
+
 from pathlib import Path
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from app.core.logger import logger
 from app.services.storage import storage_service
 
 
 class RAGService:
-    def __init__(self, persist_directory: str = "./chroma_db"):
-        """
-        Initialize RAG service with embeddings model and vector store.
+    """
+    Service for managing document ingestion and semantic retrieval.
+    Uses ChromaDB for persistent vector storage.
+    """
 
-        Args:
-            persist_directory: Where ChromaDB stores its data
-        """
+    def __init__(self, persist_directory: str = "./chroma_db"):
+        logger.info("Initializing RAG service...")
+
         # 1. Initialize text splitter for chunking
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
@@ -23,12 +34,14 @@ class RAGService:
             length_function=len,
             separators=["\n\n", "\n", " ", ""],
         )
+        logger.debug("✓ Text splitter configured (1000 chars, 200 overlap)")
 
         # 2. Initialize embedding model
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
             model_kwargs={"device": "cpu"},
         )
+        logger.debug("✓ Embedding model loaded (all-MiniLM-L6-v2)")
 
         self.persist_directory = Path(persist_directory)
         self.persist_directory.mkdir(exist_ok=True)
@@ -39,34 +52,40 @@ class RAGService:
             embedding_function=self.embeddings,
             persist_directory=str(self.persist_directory),
         )
+        logger.info(f"✓ ChromaDB initialized at: {self.persist_directory}")
 
     def ingest_files(self, filename: str):
-        """
-        Ingest a file into vector store.
-        Always removes old chunks first to prevent duplicates.
-        """
+        logger.info(f"[INGEST] Processing file: {filename}")
+
         # 1. Remove old chunks if they exist
         removed_count = self.remove_file_chunks(filename)
         if removed_count > 0:
-            print(f"[RAG] Removed {removed_count} old chunks for {filename}")
+            logger.info(f"  Removed {removed_count} old chunks")
 
         # 2. Read file content
         content = storage_service.get_file_content(filename)
         if content is None:
+            logger.error(f"✗ File not found in storage: {filename}")
             return {"status": "error", "message": f"File {filename} not found"}
 
         # 3. Split into chunks
         chunks = self.text_splitter.split_text(content)
 
         if not chunks:
+            logger.warning(f"⚠ File is empty or too short: {filename}")
             return {"status": "warning", "message": "File is empty or too short"}
 
-        # 4. Add fresh chunks
+        logger.debug(f"  Split into {len(chunks)} chunks")
+
+        # 4. Add chunks to vector store with metadata
         self.vector_store.add_texts(
             texts=chunks,
             metadatas=[{"source": filename, "chunk_id": i} for i in range(len(chunks))],
         )
 
+        logger.info(
+            f"✓ Ingested {filename}: {len(chunks)} chunks added to vector store"
+        )
         return {
             "status": "success",
             "filename": filename,
@@ -74,50 +93,55 @@ class RAGService:
         }
 
     def ingest_all_files(self):
-        """
-        Load all files from storage into vector DB.
-        Call this once when initializing or when files are uploaded.
-        """
+        logger.info("[INGEST ALL] Starting bulk ingestion...")
+
         all_files = storage_service.get_all_files()
+        logger.info(f"  Found {len(all_files)} files in storage")
 
         results = []
         for filename in all_files:
             result = self.ingest_files(filename)
             results.append(result)
 
+        total_chunks = sum(r.get("chunks_created", 0) for r in results)
+        logger.info(
+            f"✓ Bulk ingestion complete: {len(results)} files, {total_chunks} chunks"
+        )
+
         return {
             "status": "success",
             "files_processed": len(results),
-            "total_chunks": sum(r.get("chunks_created", 0) for r in results),
+            "total_chunks": total_chunks,
         }
 
     def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
-        """
-        Find most relevant chunks for a query.
+        logger.debug(f"[RETRIEVE] Query: '{query[:50]}...' (top_k={top_k})")
 
-        Args:
-            query: User's question
-            top_k: Number of chunks to return
-
-        Returns:
-            List of dicts with 'content' and 'metadata'
-        """
         results = self.vector_store.similarity_search(query, k=top_k)
 
-        return [
+        chunks = [
             {"content": doc.page_content, "metadata": doc.metadata} for doc in results
         ]
 
+        sources = set(chunk["metadata"].get("source", "unknown") for chunk in chunks)
+        logger.debug(f"✓ Retrieved {len(chunks)} chunks from files: {sources}")
+
+        return chunks
+
     def remove_file_chunks(self, filename: str):
-        """Remove all chunks for a specific file before re-ingesting."""
+        logger.debug(f"[REMOVE] Checking for existing chunks: {filename}")
+
         try:
-            # ChromaDB's get() with where filter
             existing = self.vector_store.get(where={"source": filename})
 
             if existing and existing.get("ids"):
-                self.vector_store.delete(ids=existing["ids"])
-                return len(existing["ids"])
+                chunk_ids = existing["ids"]
+                self.vector_store.delete(ids=chunk_ids)
+                logger.debug(f"✓ Removed {len(chunk_ids)} chunks for {filename}")
+                return len(chunk_ids)
+
+            logger.debug(f"  No existing chunks found for {filename}")
             return 0
         except Exception as e:
-            print(f"[RAG] Error removing chunks for {filename}: {e}")
+            logger.error(f"✗ Error removing chunks for {filename}: {e}")
             return 0

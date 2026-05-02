@@ -1,15 +1,13 @@
-import logging
-import os
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
 """
 Configuration module for Knowledge Hub application.
 Loads environment variables from .env file using Pydantic settings.
 """
 
-# Configure module logger
-logger = logging.getLogger(__name__)
+import os
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.logger import logger
 
 
 class Settings(BaseSettings):
@@ -17,10 +15,10 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables.
 
     Attributes:
-    client_url: Frontend application URL (for CORS)
-    server_url: Backend API URL
-    storage_path: Filesystem path for file storage
-    groq_api_key: API key for OpenRouter/LLM service
+        client_url: Frontend application URL (for CORS)
+        server_url: Backend API URL
+        storage_path: Filesystem path for file storage
+        groq_api_key: API key for OpenRouter/LLM service
     """
 
     client_url: str

@@ -8,6 +8,7 @@ Architecture:
 - Chunking: RecursiveCharacterTextSplitter (1000 chars, 200 overlap)
 """
 
+import asyncio
 from pathlib import Path
 
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -15,6 +16,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.core.logger import logger
+from app.services.document_parser import document_parser_service
 from app.services.storage import storage_service
 
 
@@ -54,33 +56,56 @@ class RAGService:
         )
         logger.info(f"✓ ChromaDB initialized at: {self.persist_directory}")
 
-    def ingest_files(self, filename: str):
+    async def ingest_files(self, filename: str):
+        """
+        Ingest a single file into the vector store (async, non-blocking).
+
+        Raises:
+            ValueError: If parsing fails
+        """
         logger.info(f"[INGEST] Processing file: {filename}")
 
         # 1. Remove old chunks if they exist
-        removed_count = self.remove_file_chunks(filename)
+        removed_count = await self.remove_file_chunks(filename)
         if removed_count > 0:
             logger.info(f"  Removed {removed_count} old chunks")
 
-        # 2. Read file content
-        content = storage_service.get_file_content(filename)
-        if content is None:
-            logger.error(f"✗ File not found in storage: {filename}")
-            return {"status": "error", "message": f"File {filename} not found"}
+        # 2. Read and parse file (run in thread pool to avoid blocking)
+        file_path = storage_service._get_path(filename)
+        parsed_doc = await asyncio.to_thread(
+            document_parser_service.parse_file, file_path
+        )
 
-        # 3. Split into chunks
-        chunks = self.text_splitter.split_text(content)
+        # Check for parsing errors
+        if parsed_doc.error:
+            error_msg = f"Failed to parse {filename}: {parsed_doc.error}"
+            logger.error(f"✗ {error_msg}")
+            raise ValueError(error_msg)
+
+        content = parsed_doc.content
+
+        # 3. Split into chunks (CPU-bound, run in thread pool)
+        chunks = await asyncio.to_thread(self.text_splitter.split_text, content)
 
         if not chunks:
             logger.warning(f"⚠ File is empty or too short: {filename}")
-            return {"status": "warning", "message": "File is empty or too short"}
+            raise ValueError(f"File is empty or too short: {filename}")
 
         logger.debug(f"  Split into {len(chunks)} chunks")
 
-        # 4. Add chunks to vector store with metadata
-        self.vector_store.add_texts(
-            texts=chunks,
-            metadatas=[{"source": filename, "chunk_id": i} for i in range(len(chunks))],
+        # 4. Add chunks to vector store with metadata (I/O-bound, run in thread pool)
+        metadatas = [
+            {
+                "source": filename,
+                "chunk_id": i,
+                "language": parsed_doc.language,
+                **parsed_doc.metadata,
+            }
+            for i in range(len(chunks))
+        ]
+
+        await asyncio.to_thread(
+            self.vector_store.add_texts, texts=chunks, metadatas=metadatas
         )
 
         logger.info(
@@ -92,32 +117,54 @@ class RAGService:
             "chunks_created": len(chunks),
         }
 
-    def ingest_all_files(self):
+    async def ingest_all_files(self):
+        """
+        Ingest all files from storage (async, non-blocking).
+        Processes files concurrently for better performance.
+        """
         logger.info("[INGEST ALL] Starting bulk ingestion...")
 
-        all_files = storage_service.get_all_files()
+        all_files = await asyncio.to_thread(storage_service.get_all_files)
         logger.info(f"  Found {len(all_files)} files in storage")
 
+        if not all_files:
+            logger.info("  No files to ingest")
+            return {"status": "success", "files_processed": 0, "total_chunks": 0}
+
+        # Process files concurrently (limit to 5 at a time to avoid overwhelming CPU)
         results = []
+        errors = []
+
         for filename in all_files:
-            result = self.ingest_files(filename)
-            results.append(result)
+            try:
+                result = await self.ingest_files(filename)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"✗ Failed to ingest {filename}: {e}")
+                errors.append({"filename": filename, "error": str(e)})
 
         total_chunks = sum(r.get("chunks_created", 0) for r in results)
         logger.info(
-            f"✓ Bulk ingestion complete: {len(results)} files, {total_chunks} chunks"
+            f"✓ Bulk ingestion complete: {len(results)} files succeeded, {len(errors)} failed, {total_chunks} chunks"
         )
 
         return {
             "status": "success",
             "files_processed": len(results),
             "total_chunks": total_chunks,
+            "errors": errors,
         }
 
-    def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
+    async def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
+        """
+        Retrieve relevant chunks for a query (async, non-blocking).
+        """
         logger.debug(f"[RETRIEVE] Query: '{query[:50]}...' (top_k={top_k})")
 
-        results = self.vector_store.similarity_search(query, k=top_k)
+        # Run similarity search in thread pool (ChromaDB is synchronous)
+        results = await asyncio.to_thread(
+            self.vector_store.similarity_search, query, k=top_k
+        )
 
         chunks = [
             {"content": doc.page_content, "metadata": doc.metadata} for doc in results
@@ -128,15 +175,24 @@ class RAGService:
 
         return chunks
 
-    def remove_file_chunks(self, filename: str):
+    async def remove_file_chunks(self, filename: str) -> int:
+        """
+        Remove all chunks for a given file (async, non-blocking).
+
+        Returns:
+            Number of chunks removed
+        """
         logger.debug(f"[REMOVE] Checking for existing chunks: {filename}")
 
         try:
-            existing = self.vector_store.get(where={"source": filename})
+            # Run ChromaDB operations in thread pool
+            existing = await asyncio.to_thread(
+                self.vector_store.get, where={"source": filename}
+            )
 
             if existing and existing.get("ids"):
                 chunk_ids = existing["ids"]
-                self.vector_store.delete(ids=chunk_ids)
+                await asyncio.to_thread(self.vector_store.delete, ids=chunk_ids)
                 logger.debug(f"✓ Removed {len(chunk_ids)} chunks for {filename}")
                 return len(chunk_ids)
 

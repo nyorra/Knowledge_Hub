@@ -15,6 +15,7 @@ from app.core.settings import settings
 from app.core.startup import initialize_rag, rag_service
 from app.services.assistant import assistant_service
 from app.services.storage import storage_service
+from app.services.transcription import transcription_service
 
 
 @asynccontextmanager
@@ -64,7 +65,21 @@ async def get_ai_answer(data: AiData):
         return {"status": "success", "answer": answer_text}
     except Exception as e:
         logger.error(f"✗ Error in /ai endpoint: {e}")
-        raise
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/ai/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    """Transcribe audio file to text using Whisper API."""
+    logger.info(f"[POST /ai/transcribe] Transcribing audio: {file.filename}")
+
+    try:
+        text = await transcription_service.transcribe_audio(file)
+        logger.info(f"✓ Audio transcribed successfully: {len(text)} chars")
+        return {"status": "success", "text": text}
+    except Exception as e:
+        logger.error(f"✗ Transcription error: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 # ============================================================================
@@ -79,13 +94,16 @@ async def create_file(data: FileData):
 
     try:
         result = storage_service.create_file(data.filename, data.content)
-        rag_service.ingest_files(data.filename)
+        await rag_service.ingest_files(data.filename)
 
         logger.info(f"✓ File created and ingested: {data.filename}")
         return {"status": "success", "detail": result}
+    except ValueError as e:
+        logger.error(f"✗ Parsing error for {data.filename}: {e}")
+        return {"status": "error", "message": str(e)}
     except Exception as e:
         logger.error(f"✗ Error creating file {data.filename}: {e}")
-        raise
+        return {"status": "error", "message": str(e)}
 
 
 @app.put("/storage/edit")
@@ -95,13 +113,16 @@ async def edit_file(data: FileData):
 
     try:
         result = storage_service.edit_file(data.filename, data.content)
-        rag_service.ingest_files(data.filename)
+        await rag_service.ingest_files(data.filename)
 
         logger.info(f"✓ File edited and re-ingested: {data.filename}")
         return {"status": "success", "detail": result}
+    except ValueError as e:
+        logger.error(f"✗ Parsing error for {data.filename}: {e}")
+        return {"status": "error", "message": str(e)}
     except Exception as e:
         logger.error(f"✗ Error editing file {data.filename}: {e}")
-        raise
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/storage/upload")
@@ -113,15 +134,23 @@ async def upload_file(file: UploadFile = File(...)):
         result = storage_service.upload_file_from_pc(file.file, file.filename)
 
         if result["status"] == "success":
-            rag_service.ingest_files(result["filename"])
-            logger.info(f"✓ File uploaded and ingested: {result['filename']}")
+            try:
+                await rag_service.ingest_files(result["filename"])
+                logger.info(f"✓ File uploaded and ingested: {result['filename']}")
+                return {"status": "success", "filename": result["filename"]}
+            except ValueError as e:
+                logger.error(f"✗ Parsing error for {result['filename']}: {e}")
+                return {
+                    "status": "error",
+                    "message": f"Upload succeeded but parsing failed: {str(e)}",
+                }
         else:
             logger.error(f"✗ Upload failed: {result}")
+            return result
 
-        return result
     except Exception as e:
         logger.error(f"✗ Error uploading file {file.filename}: {e}")
-        raise
+        return {"status": "error", "message": str(e)}
 
 
 @app.delete("/storage/delete")
@@ -133,7 +162,7 @@ async def delete_file(filename: Annotated[str, Query(...)]):
         result = storage_service.delete_file(filename)
 
         if result["status"] == "deleted":
-            rag_service.remove_file_chunks(filename)
+            await rag_service.remove_file_chunks(filename)
             logger.info(f"✓ File deleted from storage and RAG: {filename}")
         else:
             logger.warning(f"⚠ Delete failed: {result}")
@@ -141,7 +170,7 @@ async def delete_file(filename: Annotated[str, Query(...)]):
         return result
     except Exception as e:
         logger.error(f"✗ Error deleting file {filename}: {e}")
-        raise
+        return {"status": "error", "message": str(e)}
 
 
 # ============================================================================
@@ -160,7 +189,7 @@ async def list_files():
         return FilesResponse(files=files)
     except Exception as e:
         logger.error(f"✗ Error listing files: {e}")
-        raise
+        return {"status": "error", "message": str(e)}
 
 
 @app.get("/storage/content")
@@ -173,10 +202,11 @@ async def file_content(filename: Annotated[str, Query(...)]):
 
         if content is None:
             logger.warning(f"⚠ File not found: {filename}")
+            return {"status": "error", "message": "File not found"}
         else:
             logger.debug(f"✓ File read: {filename} ({len(content)} chars)")
+            return {"filename": filename, "content": content}
 
-        return {"filename": filename, "content": content}
     except Exception as e:
         logger.error(f"✗ Error reading file {filename}: {e}")
-        raise
+        return {"status": "error", "message": str(e)}

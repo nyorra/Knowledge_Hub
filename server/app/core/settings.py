@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     client_url: str
     server_url: str
     storage_path: str
+    openrouter_api_key: str
     groq_api_key: str
 
     model_config = SettingsConfigDict(

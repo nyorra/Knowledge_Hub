@@ -392,13 +392,16 @@ function App() {
                         >
                           <div className="flex items-center gap-2">
                             <div className="text-xl shrink-0">
-                              {file.endsWith(".txt")
-                                ? "📄"
-                                : file.endsWith(".md")
-                                  ? "📝"
-                                  : file.endsWith(".pdf")
-                                    ? "📕"
-                                    : "📎"}
+                              {(() => {
+                                const ext = file.toLowerCase().split(".").pop();
+                                if (ext === "txt") return "📄";
+                                if (ext === "md" || ext === "markdown")
+                                  return "📝";
+                                if (ext === "pdf") return "📕";
+                                if (ext === "doc" || ext === "docx")
+                                  return "📘";
+                                return "📎";
+                              })()}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p
@@ -448,7 +451,6 @@ function App() {
                       </button>
                     </div>
                     <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                      {" "}
                       {conversationHistory.map((item, idx) => (
                         <div
                           key={idx}
@@ -479,12 +481,20 @@ function App() {
                     onKeyDown={handleKeyDown}
                     onChange={(e) => setAiText(e.target.value)}
                     placeholder="Ask a question about your documents..."
-                    className="w-full h-40 p-5 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none resize-none
-  transition-all text-sm leading-relaxed"
+                    className="w-full h-40 p-5 pr-16 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:ring-4
+  focus:ring-indigo-500/20 focus:border-indigo-400 outline-none resize-none transition-all text-sm leading-relaxed"
                     disabled={loading}
                   />
                   <div className="absolute bottom-4 right-4 flex items-center gap-3">
-                    <span className="text-xs font-semibold text-slate-400 bg-white px-3 py-1 rounded-full border border-slate-200">
+                    <VoiceRecorder
+                      onTranscript={(text) =>
+                        setAiText((prev) => prev + " " + text)
+                      }
+                    />
+                    <span
+                      className="text-xs font-semibold text-slate-400 bg-white px-3 py-1 rounded-full border
+  border-slate-200"
+                    >
                       {aiText.length} characters
                     </span>
                   </div>
@@ -494,9 +504,10 @@ function App() {
                 <button
                   onClick={handleSendToAi}
                   disabled={loading || !aiText.trim()}
-                  className="w-full bg-linear-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:from-slate-200 disabled:to-slate-200
-disabled:text-slate-400 text-white py-4 rounded-2xl font-bold text-sm uppercase tracking-wider transition-all shadow-xl shadow-indigo-200 hover:shadow-2xl flex items-center
-justify-center gap-3 disabled:shadow-none disabled:cursor-not-allowed"
+                  className="w-full bg-linear-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700
+  disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 text-white py-4 rounded-2xl font-bold text-sm
+  uppercase tracking-wider transition-all shadow-xl shadow-indigo-200 hover:shadow-2xl flex items-center justify-center
+  gap-3 disabled:shadow-none disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -514,7 +525,10 @@ justify-center gap-3 disabled:shadow-none disabled:cursor-not-allowed"
 
                 {/* AI RESPONSE */}
                 {aiResponse && (
-                  <div className="bg-linear-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-6 shadow-lg">
+                  <div
+                    className="bg-linear-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-2xl p-6
+  shadow-lg"
+                  >
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-3 h-3 bg-indigo-500 rounded-full animate-pulse" />
                       <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">
@@ -748,3 +762,99 @@ function PreviewModal({ filename, content, onClose }) {
   );
 }
 export default App;
+
+// --- VOICE RECORDER COMPONENT ---
+
+function VoiceRecorder({ onTranscript }) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm;codecs=opus",
+      });
+
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach((track) => track.stop());
+        await transcribeAudio(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Microphone access error:", error);
+      alert("Failed to access microphone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob) => {
+    setIsProcessing(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", audioBlob, "recording.webm");
+
+      const response = await fetch("http://localhost:8000/ai/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.status === "success") {
+        onTranscript(data.text);
+      } else {
+        alert("Transcription failed: " + data.message);
+      }
+    } catch (error) {
+      console.error("Transcription error:", error);
+      alert("Failed to transcribe audio");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={isRecording ? stopRecording : startRecording}
+      disabled={isProcessing}
+      className={`p-2 rounded-full transition-all ${
+        isRecording
+          ? "bg-rose-500 hover:bg-rose-600 animate-pulse"
+          : isProcessing
+            ? "bg-slate-300 cursor-wait"
+            : "bg-indigo-500 hover:bg-indigo-600"
+      } text-white shadow-lg hover:shadow-xl active:scale-95 disabled:cursor-not-allowed`}
+      title={isRecording ? "Stop recording" : "Start voice recording"}
+    >
+      {isProcessing ? (
+        <span className="text-lg">⏳</span>
+      ) : isRecording ? (
+        <span className="text-lg">⏹️</span>
+      ) : (
+        <span className="text-lg">🎤</span>
+      )}
+    </button>
+  );
+}

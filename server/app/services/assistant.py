@@ -25,7 +25,7 @@ class AssistantService:
         logger.info("Initializing Assistant service...")
 
         self.llm = ChatOpenAI(
-            api_key=settings.groq_api_key,
+            api_key=settings.openrouter_api_key,
             base_url="https://openrouter.ai/api/v1",
             model="meta-llama/llama-3.1-8b-instruct",
         )
@@ -37,8 +37,8 @@ class AssistantService:
     async def answer_question(self, question: str) -> str:
         logger.info(f"[ASSISTANT] Question: '{question[:100]}...'")
 
-        # Step 1: Retrieve relevant chunks
-        relevant_chunks = self.rag_service.retrieve(question, top_k=5)
+        # Step 1: Retrieve relevant chunks (now async)
+        relevant_chunks = await self.rag_service.retrieve(question, top_k=5)
 
         # Step 2: Build context
         if not relevant_chunks:

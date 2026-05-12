@@ -17,6 +17,21 @@ class FileStorageService:
     All files are stored in a single directory specified by settings.storage_path.
     """
 
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+    ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".markdown"}
+
+    def _validate_filename(self, filename: str) -> str:
+        """Sanitize filename to prevent path traversal."""
+        safe_name = Path(filename).name
+
+        if Path(safe_name).suffix.lower() not in self.ALLOWED_EXTENSIONS:
+            raise ValueError(f"File type not allowed: {Path(safe_name).suffix}")
+
+        if ".." in safe_name or safe_name.startswith("/"):
+            raise ValueError("Invalid filename")
+
+        return safe_name
+
     def __init__(self, storage_path: str):
         self.storage_path = Path(storage_path)
         self._ensure_storage_exist()
@@ -45,7 +60,17 @@ class FileStorageService:
     def upload_file_from_pc(
         self, file_object, raw_filename: str, use_uuid: bool = False
     ):
-        safe_filename = Path(raw_filename).name
+        safe_filename = self._validate_filename(raw_filename)
+
+        file_object.seek(0, 2)
+        size = file_object.tell()
+        file_object.seek(0)  # Reset
+
+        if size > self.MAX_FILE_SIZE:
+            raise ValueError(f"File too large: {size} bytes (max {self.MAX_FILE_SIZE})")
+
+        if size == 0:
+            raise ValueError("Empty file not allowed")
 
         if use_uuid:
             unique_name = f"{uuid.uuid4().hex[:8]}_{safe_filename}"

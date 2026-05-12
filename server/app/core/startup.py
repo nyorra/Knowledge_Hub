@@ -1,45 +1,43 @@
 """
 Application startup logic.
-Initializes RAG service and defers file ingestion to background task.
+Initializes RAG service and database.
 """
 
 import asyncio
 
+from app.core.database import init_db
 from app.core.logger import logger
 from app.services.RAG import RAGService
 
-# Global RAG service instance (initialized once, used throughout app lifecycle)
+# Global RAG service instance
 rag_service = RAGService()
 logger.info("✓ RAG service instance created")
 
 
 async def initialize_rag():
-    """
-    Initialize RAG system on startup.
-    File ingestion runs in background to avoid blocking server startup.
-    """
+    """Initialize RAG system and database on startup."""
     logger.info("=" * 60)
-    logger.info("STARTUP: Initializing RAG system")
+    logger.info("STARTUP: Initializing system")
     logger.info("=" * 60)
 
     try:
-        # Start background ingestion task (non-blocking)
+        # Initialize database
+        await init_db()
+
+        # Start background ingestion task
         asyncio.create_task(_background_ingestion())
 
-        logger.info("✓ RAG initialization complete (ingestion running in background)")
+        logger.info("✓ System initialization complete")
         logger.info("=" * 60)
 
         return {"status": "started", "message": "Background ingestion in progress"}
     except Exception as e:
-        logger.error(f"✗ RAG initialization failed: {e}")
+        logger.error(f"✗ System initialization failed: {e}")
         raise
 
 
 async def _background_ingestion():
-    """
-    Background task for ingesting all existing files.
-    Runs after server startup to avoid blocking.
-    """
+    """Background task for ingesting all existing files."""
     logger.info("[BACKGROUND] Starting file ingestion...")
 
     try:

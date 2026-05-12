@@ -116,9 +116,8 @@ class DatabaseService:
         )
 
         db.add(query_record)
-        await db.flush()  # Get query ID before adding associations
+        await db.flush()
 
-        # Link source files
         for file_id in source_file_ids:
             query_file = QueryFile(query_id=query_record.id, file_id=file_id)
             db.add(query_file)
@@ -132,15 +131,12 @@ class DatabaseService:
     @staticmethod
     async def get_analytics(db: AsyncSession) -> dict:
         """Get system analytics."""
-        # Total files
         total_files = await db.scalar(
             select(func.count(File.id)).where(not File.is_deleted)
         )
 
-        # Total queries
         total_queries = await db.scalar(select(func.count(Query.id)))
 
-        # Total chunks
         total_chunks = (
             await db.scalar(
                 select(func.sum(File.chunk_count)).where(not File.is_deleted)
@@ -148,7 +144,6 @@ class DatabaseService:
             or 0
         )
 
-        # Average response time
         avg_response_time = await db.scalar(select(func.avg(Query.response_time_ms)))
 
         return {

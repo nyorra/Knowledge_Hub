@@ -1,3 +1,8 @@
+"""
+Pydantic schemas for request/response validation.
+These models ensure type safety and automatic validation for API endpoints.
+"""
+
 from datetime import datetime
 from typing import Optional
 
@@ -104,8 +109,6 @@ class AnalyticsResponse(BaseModel):
     total_queries: int
     total_chunks: int
     avg_response_time_ms: Optional[float]
-    most_queried_files: list[dict]
-    queries_per_day: list[dict]
 
 
 # ============================================================================

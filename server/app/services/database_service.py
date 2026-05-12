@@ -77,7 +77,7 @@ class DatabaseService:
     async def get_file_by_filename(db: AsyncSession, filename: str) -> Optional[File]:
         """Get file record by filename."""
         result = await db.execute(
-            select(File).where(File.filename == filename, File.is_deleted == False)
+            select(File).where(File.filename == filename, not File.is_deleted)
         )
         return result.scalar_one_or_none()
 
@@ -134,7 +134,7 @@ class DatabaseService:
         """Get system analytics."""
         # Total files
         total_files = await db.scalar(
-            select(func.count(File.id)).where(File.is_deleted == False)
+            select(func.count(File.id)).where(not File.is_deleted)
         )
 
         # Total queries
@@ -143,7 +143,7 @@ class DatabaseService:
         # Total chunks
         total_chunks = (
             await db.scalar(
-                select(func.sum(File.chunk_count)).where(File.is_deleted == False)
+                select(func.sum(File.chunk_count)).where(not File.is_deleted)
             )
             or 0
         )

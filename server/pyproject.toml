@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "backend service for Knowledge hub"
 requires-python = ">=3.13"
 dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
     "chardet>=7.4.3",
     "chromadb>=1.5.8",
     "fastapi>=0.136.1",
@@ -24,5 +27,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "ruff>=0.15.12",
 ]

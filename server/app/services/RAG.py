@@ -117,11 +117,8 @@ class RAGService:
             "chunks_created": len(chunks),
         }
 
-    async def ingest_all_files(self):
-        """
-        Ingest all files from storage (async, non-blocking).
-        Processes files concurrently for better performance.
-        """
+    async def ingest_all_files(self, max_concurrent: int = 3):
+        """Ingest all files with controlled concurrency."""
         logger.info("[INGEST ALL] Starting bulk ingestion...")
 
         all_files = await asyncio.to_thread(storage_service.get_all_files)
@@ -131,21 +128,24 @@ class RAGService:
             logger.info("  No files to ingest")
             return {"status": "success", "files_processed": 0, "total_chunks": 0}
 
-        # Process files concurrently (limit to 5 at a time to avoid overwhelming CPU)
+        semaphore = asyncio.Semaphore(max_concurrent)
         results = []
         errors = []
 
-        for filename in all_files:
-            try:
-                result = await self.ingest_files(filename)
-                results.append(result)
-            except Exception as e:
-                logger.error(f"✗ Failed to ingest {filename}: {e}")
-                errors.append({"filename": filename, "error": str(e)})
+        async def ingest_with_limit(filename: str):
+            async with semaphore:
+                try:
+                    result = await self.ingest_files(filename)
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"✗ Failed to ingest {filename}: {e}")
+                    errors.append({"filename": filename, "error": str(e)})
+
+        await asyncio.gather(*[ingest_with_limit(f) for f in all_files])
 
         total_chunks = sum(r.get("chunks_created", 0) for r in results)
         logger.info(
-            f"✓ Bulk ingestion complete: {len(results)} files succeeded, {len(errors)} failed, {total_chunks} chunks"
+            f"✓ Bulk ingestion complete: {len(results)} succeeded, {len(errors)} failed, {total_chunks} chunks"
         )
 
         return {
@@ -161,7 +161,6 @@ class RAGService:
         """
         logger.debug(f"[RETRIEVE] Query: '{query[:50]}...' (top_k={top_k})")
 
-        # Run similarity search in thread pool (ChromaDB is synchronous)
         results = await asyncio.to_thread(
             self.vector_store.similarity_search, query, k=top_k
         )
@@ -185,7 +184,6 @@ class RAGService:
         logger.debug(f"[REMOVE] Checking for existing chunks: {filename}")
 
         try:
-            # Run ChromaDB operations in thread pool
             existing = await asyncio.to_thread(
                 self.vector_store.get, where={"source": filename}
             )

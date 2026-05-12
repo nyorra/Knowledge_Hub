@@ -6,7 +6,7 @@ Defines HTTP endpoints for file storage and AI assistant.
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import FastAPI, File, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.logger import logger
@@ -127,30 +127,33 @@ async def edit_file(data: FileData):
 
 @app.post("/storage/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Upload file from client and ingest into RAG."""
     logger.info(f"[POST /storage/upload] Uploading: {file.filename}")
 
     try:
         result = storage_service.upload_file_from_pc(file.file, file.filename)
 
-        if result["status"] == "success":
-            try:
-                await rag_service.ingest_files(result["filename"])
-                logger.info(f"✓ File uploaded and ingested: {result['filename']}")
-                return {"status": "success", "filename": result["filename"]}
-            except ValueError as e:
-                logger.error(f"✗ Parsing error for {result['filename']}: {e}")
-                return {
-                    "status": "error",
-                    "message": f"Upload succeeded but parsing failed: {str(e)}",
-                }
-        else:
-            logger.error(f"✗ Upload failed: {result}")
-            return result
+        try:
+            await rag_service.ingest_files(result["filename"])
+            logger.info(f"✓ File uploaded and ingested: {result['filename']}")
+            return {"status": "success", "filename": result["filename"]}
+
+        except ValueError as e:
+            logger.error(f"✗ Parsing error for {result['filename']}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"File uploaded but parsing failed: {str(e)}",
+            )
+
+    except ValueError as e:
+        logger.error(f"✗ Validation error: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     except Exception as e:
-        logger.error(f"✗ Error uploading file {file.filename}: {e}")
-        return {"status": "error", "message": str(e)}
+        logger.error(f"✗ Unexpected error uploading {file.filename}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error during upload",
+        )
 
 
 @app.delete("/storage/delete")
